@@ -57,8 +57,8 @@ export default function Login() {
       const { error } = await supabase.auth.signInWithOtp({
         email: cleanEmail,
         options: {
-          // Redirección automática tras pulsar el enlace en el correo electrónico
-          emailRedirectTo: `${window.location.origin}/dashboard`,
+          // Redirección automática a la ruta de callback para intercambiar el código PKCE
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
         },
       })
 
