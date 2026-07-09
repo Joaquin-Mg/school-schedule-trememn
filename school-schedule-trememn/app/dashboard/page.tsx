@@ -30,13 +30,13 @@ interface Reserva {
 export default function Dashboard() {
   const supabase = createClient()
   const router = useRouter()
-  
+
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [espacios, setEspacios] = useState<Espacio[]>([])
   const [bloques, setBloques] = useState<Bloque[]>([])
   const [reservasSemanales, setReservasSemanales] = useState<Reserva[]>([])
-  
+
   const [selectedEspacio, setSelectedEspacio] = useState<string>('')
   const [selectedFecha, setSelectedFecha] = useState<string>(new Date().toISOString().split('T')[0])
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -80,7 +80,7 @@ export default function Dashboard() {
       `)
       .eq('usuario_id', userId)
       .order('fecha', { ascending: true })
-    
+
     setReservasSemanales(res as unknown as Reserva[] || [])
   }
 
@@ -213,7 +213,7 @@ export default function Dashboard() {
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
             <h2 className="text-xl font-bold text-slate-900">Mis Reservas Activas</h2>
             <p className="text-xs text-slate-500">Recuerda que tienes un cupo de un máximo de 2 reservas a la semana.</p>
-            
+
             {reservasSemanales.length === 0 ? (
               <div className="text-center py-8 text-slate-400 text-sm border-2 border-dashed border-slate-100 rounded-xl">
                 No tienes reservas registradas para esta semana.
@@ -232,9 +232,10 @@ export default function Dashboard() {
                         </p>
                       </div>
                     </div>
+
                     {/* CODIGO QR IMPRESO EN PANTALLA COMO COMPROBANTE INMEDIATO */}
                     <div className="flex flex-col items-center justify-center p-3 bg-white rounded-xl border border-slate-200">
-                      <QRCodeSVG 
+                      <QRCodeSVG
                         value={`${typeof window !== 'undefined' ? window.location.origin : ''}/validar/${res.codigo_qr_validador}`}
                         size={120}
                         level={"H"}
