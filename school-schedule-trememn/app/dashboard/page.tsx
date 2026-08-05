@@ -46,17 +46,17 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<'reservar' | 'mis_reservas' | 'historial'>('reservar')
 
   useEffect(() => {
-    const checkUser = async () => {
+    // El middleware (middleware.ts) ya garantiza que solo usuarios
+    // autenticados llegan aquí. Solo necesitamos cargar los datos.
+    const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        router.push('/login')
-      } else {
+      if (user) {
         setUser(user)
         await cargarDatosIniciales(user.id)
       }
       setLoading(false)
     }
-    checkUser()
+    init()
   }, [])
 
   const cargarDatosIniciales = async (userId: string) => {
