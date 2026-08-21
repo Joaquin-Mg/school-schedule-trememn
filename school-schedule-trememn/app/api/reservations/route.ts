@@ -1,4 +1,4 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 
@@ -10,14 +10,13 @@ export async function POST(request: Request) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
+        getAll() {
+          return cookieStore.getAll()
         },
-        set(name: string, value: string, options: CookieOptions) {
-          cookieStore.set({ name, value, ...options })
-        },
-        remove(name: string, options: CookieOptions) {
-          cookieStore.delete({ name, ...options })
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options)
+          )
         },
       },
     }
@@ -39,11 +38,34 @@ export async function POST(request: Request) {
     )
   }
 
+  // ── C-2: Límite de reservas activas por alumno ──────────────────────────────
+  const MAX = parseInt(process.env.MAX_ACTIVE_RESERVATIONS ?? '2')
+  const todayStr = new Date().toISOString().split('T')[0]
+
+  const { count, error: countError } = await supabase
+    .from('reservas')
+    .select('*', { count: 'exact', head: true })
+    .eq('usuario_id', user.id)
+    .eq('status', 'active')
+    .gte('fecha', todayStr)
+
+  if (countError) {
+    return NextResponse.json({ error: 'Error al verificar límite de reservas' }, { status: 500 })
+  }
+
+  if ((count ?? 0) >= MAX) {
+    return NextResponse.json(
+      { error: `Límite alcanzado: máximo ${MAX} reservas activas permitidas. Cancela una existente para continuar.` },
+      { status: 422 }
+    )
+  }
+  // ───────────────────────────────────────────────────────────────────────────
+
   const { data, error } = await supabase
     .from('reservas')
     .insert([
       {
-        usuario_id: user.id,      // del token, nunca del cliente
+        usuario_id: user.id,       // del token, nunca del cliente
         usuario_email: user.email, // del token, nunca del cliente
         espacio_id,
         bloque_id,
