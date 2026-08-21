@@ -61,6 +61,27 @@ export async function POST(request: Request) {
   }
   // ───────────────────────────────────────────────────────────────────────────
 
+  // ── C-3: Máximo 1 reserva por tipo de espacio por día ──────────────────────
+  const { count: sameSpaceCount, error: sameSpaceError } = await supabase
+    .from('reservas')
+    .select('*', { count: 'exact', head: true })
+    .eq('usuario_id', user.id)
+    .eq('espacio_id', espacio_id)
+    .eq('fecha', fecha)
+    .eq('status', 'active')
+
+  if (sameSpaceError) {
+    return NextResponse.json({ error: 'Error al verificar disponibilidad del espacio' }, { status: 500 })
+  }
+
+  if ((sameSpaceCount ?? 0) > 0) {
+    return NextResponse.json(
+      { error: 'Ya tienes una reserva para este espacio en la fecha seleccionada.' },
+      { status: 422 }
+    )
+  }
+  // ───────────────────────────────────────────────────────────────────────────
+
   const { data, error } = await supabase
     .from('reservas')
     .insert([
