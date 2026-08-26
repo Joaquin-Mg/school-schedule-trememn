@@ -45,6 +45,9 @@ export default function Dashboard() {
   // Control de pestañas del panel lateral
   const [activeTab, setActiveTab] = useState<'reservar' | 'mis_reservas' | 'historial'>('reservar')
 
+  // ID de la reserva que está siendo cancelada (controla spinner + disabled)
+  const [cancellingId, setCancellingId] = useState<string | null>(null)
+
   useEffect(() => {
     // El middleware (middleware.ts) ya garantiza que solo usuarios
     // autenticados llegan aquí. Solo necesitamos cargar los datos.
@@ -127,6 +130,31 @@ export default function Dashboard() {
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.push('/login')
+  }
+
+  const handleCancelar = async (reservaId: string) => {
+    const confirmar = window.confirm('¿Estás seguro de que deseas cancelar esta reserva? Esta acción no se puede deshacer.')
+    if (!confirmar) return
+
+    setCancellingId(reservaId)
+    setErrorMsg(null)
+
+    try {
+      const res = await fetch(`/api/reservations/${reservaId}/cancel`, { method: 'PATCH' })
+      const body = await res.json()
+
+      if (!res.ok) {
+        setErrorMsg(body.error || 'No se pudo cancelar la reserva. Intenta nuevamente.')
+        return
+      }
+
+      // Eliminar la tarjeta del estado local sin recargar la página
+      setReservasSemanales((prev) => prev.filter((r) => r.id !== reservaId))
+    } catch {
+      setErrorMsg('Error de red al cancelar la reserva. Intenta nuevamente.')
+    } finally {
+      setCancellingId(null)
+    }
   }
 
   const formatFecha = (fechaStr: string) => {
@@ -279,7 +307,7 @@ export default function Dashboard() {
 
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">2. Selecciona la Fecha</label>
-                    <input type="date" value={selectedFecha} onChange={(e) => setSelectedFecha(e.target.value)} className="w-full border border-slate-200 rounded-xl p-3 bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold transition-all" />
+                    <input type="date" value={selectedFecha} min={todayStr} onChange={(e) => setSelectedFecha(e.target.value)} className="w-full border border-slate-200 rounded-xl p-3 bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold transition-all" />
                   </div>
                 </div>
 
@@ -359,6 +387,22 @@ export default function Dashboard() {
                         />
                         <span className="text-[9px] font-mono text-slate-400 mt-2.5">ID: {res.codigo_qr_validador.slice(0, 8)}...</span>
                       </div>
+
+                      {/* BOTÓN CANCELAR */}
+                      <button
+                        onClick={() => handleCancelar(res.id)}
+                        disabled={cancellingId === res.id}
+                        className="w-full flex items-center justify-center space-x-2 px-4 py-2.5 border border-red-200 text-red-600 text-xs font-bold rounded-xl hover:bg-red-50 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+                      >
+                        {cancellingId === res.id ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            <span>Cancelando...</span>
+                          </>
+                        ) : (
+                          <span>Cancelar reserva</span>
+                        )}
+                      </button>
                     </div>
                   ))}
                 </div>
