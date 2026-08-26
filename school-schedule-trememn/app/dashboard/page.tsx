@@ -94,27 +94,33 @@ export default function Dashboard() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    const { error } = await supabase.from('reservas').insert([
-      {
-        usuario_id: user.id,
-        usuario_email: user.email,
-        espacio_id: selectedEspacio,
-        bloque_id: bloqueId,
-        fecha: selectedFecha
-      }
-    ])
+    try {
+      const res = await fetch('/api/reservations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          espacio_id: selectedEspacio,
+          bloque_id: bloqueId,
+          fecha: selectedFecha,
+        }),
+      })
 
-    if (error) {
-      setErrorMsg(error.message)
-    } else {
-      setSuccessMsg('¡Reserva confirmada con éxito! Tu comprobante QR ya está disponible en "Mis Reservas".')
-      confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } })
-      await actualizarReservas(user.id)
-      
-      // Opcional: Cambia automáticamente a la pestaña de Mis Reservas activas para que el alumno vea su ticket
-      setTimeout(() => {
-        setActiveTab('mis_reservas')
-      }, 1500)
+      const json = await res.json()
+
+      if (!res.ok) {
+        setErrorMsg(json.error ?? 'Error al crear la reserva')
+      } else {
+        setSuccessMsg('¡Reserva confirmada con éxito! Tu comprobante QR ya está disponible en "Mis Reservas".')
+        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } })
+        await actualizarReservas(user.id)
+
+        // Cambia automáticamente a la pestaña de Mis Reservas activas para que el alumno vea su ticket
+        setTimeout(() => {
+          setActiveTab('mis_reservas')
+        }, 1500)
+      }
+    } catch {
+      setErrorMsg('Error de red al procesar la reserva. Intenta nuevamente.')
     }
   }
 
