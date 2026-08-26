@@ -1,36 +1,70 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Sistema de Reservas — Colegio Intercultural Trememn
 
-## Getting Started
+Aplicación web para que estudiantes reserven espacios físicos del colegio (mesa de ping pong, cancha de fútbol, etc.) usando su correo institucional `@trememn.cl`.
 
-First, run the development server:
+## Stack
+
+- **Framework:** Next.js 16 (App Router)
+- **Lenguaje:** TypeScript 5
+- **Estilos:** Tailwind CSS 4
+- **Base de datos / Auth:** Supabase (PostgreSQL + Auth)
+- **Deploy:** Vercel
+
+## Estructura del repositorio (monorepo)
+
+```
+school-schedule-trememn/          ← raíz del repositorio GitHub
+├── node_modules/                 ← dependencias de la app (instaladas aquí)
+├── package.json                  ← package.json RAÍZ (legacy — no usar para desarrollo)
+├── package-lock.json             ← lock raíz (dependencias de la app)
+└── school-schedule-trememn/     ← directorio raíz de la app Next.js (root de Vercel)
+    ├── app/
+    ├── lib/
+    ├── public/
+    ├── next.config.ts
+    ├── package.json              ← package.json ACTIVO (versiones canónicas)
+    ├── package-lock.json         ← lock del subdirectorio (Next, React, devDependencies)
+    └── tsconfig.json
+```
+
+> **Importante:** Vercel hace el build desde `school-schedule-trememn/` (el subdirectorio).
+> Las dependencias de la app (`@supabase`, `lucide-react`, `qrcode.react`, etc.) están instaladas
+> en `node_modules/` de la **raíz del repo**, no en el subdirectorio.
+
+## Desarrollo local
+
+Correr desde la **raíz del repositorio**:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+O bien, si usás el subdirectorio directamente:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+cd school-schedule-trememn
+npm install   # instala Next, React y devDependencies del subdirectorio
+cd ..
+npm install   # instala las dependencias de la app (@supabase, lucide-react, etc.)
+npm run dev   # inicia el servidor desde la raíz
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Variables de entorno
 
-## Learn More
+Crear `.env.local` en la raíz del repositorio con:
 
-To learn more about Next.js, take a look at the following resources:
+```env
+NEXT_PUBLIC_SUPABASE_URL=<url de tu proyecto Supabase>
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<clave anon de Supabase>
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Versiones instaladas
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Paquete | Versión |
+|---|---|
+| Next.js | 16.2.10 |
+| React | 19.2.4 |
+| TypeScript | 5.x |
+| Tailwind CSS | 4.x |
+| @supabase/ssr | 0.12.0 |
+| @supabase/supabase-js | 2.110.1 |
