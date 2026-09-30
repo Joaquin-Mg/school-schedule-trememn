@@ -47,6 +47,7 @@ export default function Dashboard() {
 
   // ID de la reserva que está siendo cancelada (controla spinner + disabled)
   const [cancellingId, setCancellingId] = useState<string | null>(null)
+  const [esProfesor, setEsProfesor] = useState(false)
 
   useEffect(() => {
     // El middleware (middleware.ts) ya garantiza que solo usuarios
@@ -63,10 +64,13 @@ export default function Dashboard() {
   }, [])
 
   const cargarDatosIniciales = async (userId: string) => {
-    // 1. Obtener Espacios
-    const { data: esp } = await supabase.from('categorias_espacios').select('*')
-    setEspacios(esp || [])
-    if (esp && esp.length > 0) setSelectedEspacio(esp[0].id)
+    // 1. Obtener Espacios (filtrados por rol via servidor)
+    const res = await fetch('/api/spaces')
+    const json = await res.json()
+    const esp = json.espacios || []
+    setEspacios(esp)
+    setEsProfesor(json.esProfesor || false)
+    if (esp.length > 0) setSelectedEspacio(esp[0].id)
 
     // 2. Obtener Bloques fijos
     const { data: blq } = await supabase.from('bloques_horarios').select('*').order('hora_inicio')
@@ -191,7 +195,9 @@ export default function Dashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <span className="font-bold text-xl text-indigo-600 tracking-tight">Trememn Reservas</span>
-            <span className="text-xs bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-md font-medium hidden sm:inline-block">Alumno</span>
+            <span className="text-xs bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-md font-medium hidden sm:inline-block">
+              {esProfesor ? 'Profesor' : 'Alumno'}
+            </span>
           </div>
           <div className="flex items-center space-x-4">
             <span className="text-sm text-slate-600 font-medium hidden md:inline-block">{user?.email}</span>
