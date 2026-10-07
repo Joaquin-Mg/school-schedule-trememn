@@ -9,12 +9,12 @@ interface PageProps {
 }
 
 interface ReservaDetalle {
-  id: string
+  estado: 'valida' | 'cancelada' | 'otra_fecha'
+  espacio: string | null
   fecha: string
-  usuario_email: string
-  codigo_qr_validador: string
-  categorias_espacios: { nombre: string } | null
-  bloques_horarios: { hora_inicio: string; hora_fin: string } | null
+  hora_inicio: string | null
+  hora_fin: string | null
+  alumno: string
 }
 
 export default function Validar({ params }: PageProps) {
@@ -30,27 +30,19 @@ export default function Validar({ params }: PageProps) {
     setLoading(true)
     setErrorMsg(null)
     try {
-      const { data, error } = await supabase
-        .from('reservas')
-        .select(`
-          id,
-          fecha,
-          usuario_email,
-          codigo_qr_validador,
-          categorias_espacios (nombre),
-          bloques_horarios (hora_inicio, hora_fin)
-        `)
-        .eq('codigo_qr_validador', id)
-        .maybeSingle()
+      const { data, error } = await supabase.rpc('validar_reserva', { codigo: id })
 
       if (error) {
         throw new Error(error.message)
       }
 
-      if (!data) {
+      const fila = Array.isArray(data) ? data[0] : data
+
+      if (!fila) {
+        setReserva(null)
         setErrorMsg('Reserva no encontrada. El código QR no es válido o ha expirado.')
       } else {
-        setReserva(data as unknown as ReservaDetalle)
+        setReserva(fila as ReservaDetalle)
         setScanTime(new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
       }
     } catch (err: any) {
@@ -89,6 +81,16 @@ export default function Validar({ params }: PageProps) {
     }
   }
 
+  const esValida = !errorMsg && reserva?.estado === 'valida'
+  const tituloRechazo = reserva?.estado === 'cancelada' ? 'Reserva cancelada' : 'Reserva Inválida'
+  const mensajeRechazo =
+    errorMsg ||
+    (reserva?.estado === 'cancelada'
+      ? 'Reserva cancelada. Esta reserva ya no es válida.'
+      : reserva?.estado === 'otra_fecha'
+        ? `La reserva no es para hoy. Corresponde al ${formatFecha(reserva.fecha)}.`
+        : 'No se pudo cargar la información de validación.')
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
@@ -109,7 +111,7 @@ export default function Validar({ params }: PageProps) {
       <div className="relative w-full max-w-md bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-3xl overflow-hidden shadow-2xl shadow-indigo-950/20">
         
         {/* Cabecera Estado */}
-        {!errorMsg && reserva ? (
+        {esValida ? (
           <div className="bg-gradient-to-b from-emerald-500/20 to-emerald-500/5 p-8 flex flex-col items-center text-center border-b border-slate-800/60 relative">
             <div className="absolute top-4 right-4">
               <span className="flex h-3.5 w-3.5 relative">
@@ -129,7 +131,7 @@ export default function Validar({ params }: PageProps) {
               <XCircle className="h-11.5 w-11.5" />
             </div>
             <h1 className="text-2xl font-extrabold text-red-400 tracking-tight">Acceso Denegado</h1>
-            <p className="text-red-200/50 text-xs font-semibold mt-1 uppercase tracking-widest">Reserva Inválida</p>
+            <p className="text-red-200/50 text-xs font-semibold mt-1 uppercase tracking-widest">{tituloRechazo}</p>
           </div>
         )}
 
@@ -140,7 +142,7 @@ export default function Validar({ params }: PageProps) {
           <div className="absolute -left-3.5 top-1/2 -translate-y-1/2 w-7 h-7 bg-slate-950 rounded-full border border-slate-800 border-l-transparent z-10" />
           <div className="absolute -right-3.5 top-1/2 -translate-y-1/2 w-7 h-7 bg-slate-950 rounded-full border border-slate-800 border-r-transparent z-10" />
 
-          {!errorMsg && reserva ? (
+          {esValida && reserva ? (
             <div className="space-y-6">
               
               {/* Alumno */}
@@ -151,9 +153,8 @@ export default function Validar({ params }: PageProps) {
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Alumno</p>
                   <p className="text-base font-bold text-slate-100 truncate mt-0.5">
-                    {formatEmailToName(reserva.usuario_email)}
+                    {formatEmailToName(reserva.alumno)}
                   </p>
-                  <p className="text-xs text-slate-400 truncate mt-0.5">{reserva.usuario_email}</p>
                 </div>
               </div>
 
@@ -165,7 +166,7 @@ export default function Validar({ params }: PageProps) {
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Espacio Reservado</p>
                   <p className="text-base font-bold text-slate-100 mt-0.5">
-                    {reserva.categorias_espacios?.nombre || 'Espacio no especificado'}
+                    {reserva.espacio || 'Espacio no especificado'}
                   </p>
                 </div>
               </div>
@@ -192,8 +193,8 @@ export default function Validar({ params }: PageProps) {
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Horario</p>
                     <p className="text-xs font-bold text-slate-200 mt-0.5">
-                      {reserva.bloques_horarios
-                        ? `${reserva.bloques_horarios.hora_inicio.slice(0, 5)} - ${reserva.bloques_horarios.hora_fin.slice(0, 5)}`
+                      {reserva.hora_inicio && reserva.hora_fin
+                        ? `${reserva.hora_inicio.slice(0, 5)} - ${reserva.hora_fin.slice(0, 5)}`
                         : 'Horario no definido'}
                     </p>
                   </div>
@@ -204,7 +205,7 @@ export default function Validar({ params }: PageProps) {
           ) : (
             <div className="text-center py-6 space-y-4">
               <p className="text-slate-300 font-medium text-sm">
-                {errorMsg || 'No se pudo cargar la información de validación.'}
+                {mensajeRechazo}
               </p>
               <button
                 onClick={fetchReserva}
@@ -225,7 +226,7 @@ export default function Validar({ params }: PageProps) {
             </div>
             <p className="text-[10px] text-slate-500 font-mono mt-0.5">ID: {id.slice(0, 18)}...</p>
           </div>
-          {!errorMsg && (
+          {esValida && (
             <div className="bg-slate-900 border border-slate-850 px-3 py-1.5 rounded-xl font-mono text-[10px] text-slate-400">
               Escaneado: {scanTime}
             </div>
