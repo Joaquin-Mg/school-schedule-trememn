@@ -27,6 +27,14 @@ interface Reserva {
   bloques_horarios: { hora_inicio: string; hora_fin: string }
 }
 
+// F-4: estado de un bloque en la grilla
+interface BloqueEstado {
+  bloque_id: string
+  ocupado_por_usuario_id: string
+  es_propio: boolean
+  curso_ocupante: string | null
+}
+
 export default function Dashboard() {
   const supabase = createClient()
   const router = useRouter()
@@ -41,6 +49,9 @@ export default function Dashboard() {
   const [selectedFecha, setSelectedFecha] = useState<string>(new Date().toISOString().split('T')[0])
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
+
+  // F-4: mapa de bloque_id → estado de ocupación para el espacio+fecha seleccionados
+  const [bloquesOcupados, setBloquesOcupados] = useState<Record<string, BloqueEstado>>({})
   
   // Control de pestañas del panel lateral
   const [activeTab, setActiveTab] = useState<'reservar' | 'mis_reservas' | 'historial'>('reservar')
@@ -71,6 +82,7 @@ export default function Dashboard() {
     setEspacios(esp)
     setEsProfesor(json.esProfesor || false)
     if (esp.length > 0) setSelectedEspacio(esp[0].id)
+    // bloquesOcupados se carga en cargarBloquesOcupados (se llama al cambiar espacio/fecha)
 
     // 2. Obtener Bloques fijos
     const { data: blq } = await supabase.from('bloques_horarios').select('*').order('hora_inicio')
@@ -90,9 +102,32 @@ export default function Dashboard() {
       `)
       .eq('usuario_id', userId)
       .order('fecha', { ascending: true })
-    
+
     setReservasSemanales(res as unknown as Reserva[] || [])
   }
+
+  // F-4: Cargar qué bloques están ocupados para el espacio+fecha seleccionados
+  const cargarBloquesOcupados = async (espacioId: string, fecha: string) => {
+    if (!espacioId || !fecha) return
+    try {
+      const res = await fetch(`/api/spaces?espacio_id=${espacioId}&fecha=${fecha}`)
+      const json = await res.json()
+      const mapa: Record<string, BloqueEstado> = {}
+      for (const b of (json.bloquesOcupados ?? [])) {
+        mapa[b.bloque_id] = b
+      }
+      setBloquesOcupados(mapa)
+    } catch {
+      // fallo silencioso — la grilla sigue funcionando sin estado de ocupación
+    }
+  }
+
+  // Recargar bloques ocupados cuando cambia espacio o fecha
+  useEffect(() => {
+    if (selectedEspacio && selectedFecha) {
+      cargarBloquesOcupados(selectedEspacio, selectedFecha)
+    }
+  }, [selectedEspacio, selectedFecha])
 
   const handleReserva = async (bloqueId: string) => {
     setErrorMsg(null)
@@ -199,8 +234,16 @@ export default function Dashboard() {
               {esProfesor ? 'Profesor' : 'Alumno'}
             </span>
           </div>
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-3">
             <span className="text-sm text-slate-600 font-medium hidden md:inline-block">{user?.email}</span>
+            {esProfesor && (
+              <a
+                href="/admin"
+                className="inline-flex items-center space-x-1.5 px-3 py-2 border border-indigo-200 bg-indigo-50 text-sm font-bold rounded-xl text-indigo-700 hover:bg-indigo-100 transition-colors hidden sm:inline-flex"
+              >
+                <span>Panel Admin</span>
+              </a>
+            )}
             <button onClick={handleLogout} className="inline-flex items-center space-x-1.5 px-3 py-2 border border-slate-200 text-sm font-medium rounded-xl text-slate-700 hover:bg-slate-50 transition-colors">
               <LogOut className="h-4 w-4" />
               <span className="hidden sm:inline">Cerrar Sesión</span>
@@ -317,26 +360,61 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* Bloques disponibles */}
+                {/* Bloques disponibles — F-4: muestra curso del ocupante */}
                 <div className="pt-4 border-t border-slate-100">
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">3. Bloques Horarios Disponibles</label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {bloques.map((b) => (
-                      <div key={b.id} className="border border-slate-200 rounded-xl p-4 flex items-center justify-between hover:border-slate-300 transition-all bg-white shadow-sm">
-                        <div className="flex items-center space-x-3">
-                          <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl">
-                            <Clock className="h-5 w-5" />
+                    {bloques.map((b) => {
+                      const estado = bloquesOcupados[b.id]
+                      const esPropio   = estado?.es_propio ?? false
+                      const estaOcupado = !!estado && !esPropio
+                      const cursoOcupante = estado?.curso_ocupante ?? null
+
+                      // Texto dinámico del slot
+                      let textoSlot: string
+                      if (esPropio)      textoSlot = 'Tu reserva'
+                      else if (estaOcupado) textoSlot = cursoOcupante ? `${cursoOcupante} — ocupado` : 'Ocupado'
+                      else               textoSlot = 'Reservar'
+
+                      const deshabilitado = esPropio || estaOcupado
+
+                      return (
+                        <div
+                          key={b.id}
+                          className={`border rounded-xl p-4 flex items-center justify-between transition-all bg-white shadow-sm ${
+                            deshabilitado
+                              ? 'border-slate-100 opacity-70 cursor-not-allowed'
+                              : 'border-slate-200 hover:border-slate-300'
+                          }`}
+                        >
+                          <div className="flex items-center space-x-3">
+                            <div className={`p-2.5 rounded-xl ${deshabilitado ? 'bg-slate-100 text-slate-400' : 'bg-indigo-50 text-indigo-600'}`}>
+                              <Clock className="h-5 w-5" />
+                            </div>
+                            <div>
+                              <p className="font-bold text-slate-800">{b.hora_inicio.slice(0, 5)} - {b.hora_fin.slice(0, 5)}</p>
+                              {estaOcupado && cursoOcupante && (
+                                <p className="text-[10px] text-slate-500 font-semibold mt-0.5">{cursoOcupante}</p>
+                              )}
+                              {!deshabilitado && (
+                                <p className="text-[10px] text-slate-400 font-medium">Disponible</p>
+                              )}
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-bold text-slate-800">{b.hora_inicio.slice(0, 5)} - {b.hora_fin.slice(0, 5)}</p>
-                            <p className="text-[10px] text-slate-400 font-medium">Disponibilidad regulada</p>
-                          </div>
+                          <button
+                            onClick={() => !deshabilitado && handleReserva(b.id)}
+                            disabled={deshabilitado}
+                            className={`font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm ${
+                              deshabilitado
+                                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                                : 'bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95'
+                            }`}
+                          >
+                            {textoSlot}
+                          </button>
                         </div>
-                        <button onClick={() => handleReserva(b.id)} className="bg-indigo-600 text-white font-bold text-xs px-4 py-2.5 rounded-xl hover:bg-indigo-700 active:scale-95 transition-all shadow-sm">
-                          Reservar
-                        </button>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               </div>

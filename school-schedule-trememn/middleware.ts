@@ -37,8 +37,8 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
-  // Ruta privada sin sesión → redirigir a /login
-  if (!user && pathname.startsWith('/dashboard')) {
+  // Rutas privadas sin sesión → redirigir a /login
+  if (!user && (pathname.startsWith('/dashboard') || pathname.startsWith('/admin'))) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 

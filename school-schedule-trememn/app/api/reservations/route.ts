@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { isTeacher } from '@/lib/roles'
+import { CUPO_SEMANAL, CUPO_DIARIO, semanaDeUnaFecha } from '@/lib/cupos'
 
 export async function POST(request: Request) {
   const cookieStore = await cookies()
@@ -83,6 +84,71 @@ export async function POST(request: Request) {
         { error: 'Ya tienes una reserva para este espacio en la fecha seleccionada.' },
         { status: 422 }
       )
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // ── F-3: Cupos por nivel ──────────────────────────────────────────────────
+    const { data: perfil } = await supabase
+      .from('profiles')
+      .select('curso')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    const curso = perfil?.curso ?? null
+
+    if (curso) {
+      // Obtener todos los IDs de alumnos del mismo curso
+      const { data: companerosData, error: companerosError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('curso', curso)
+
+      if (companerosError) {
+        return NextResponse.json({ error: 'Error al verificar cupos del nivel' }, { status: 500 })
+      }
+
+      const companerosIds = (companerosData ?? []).map(p => p.id)
+
+      if (companerosIds.length > 0) {
+        const { inicio: inicioSemana, fin: finSemana } = semanaDeUnaFecha(fecha)
+
+        // Reservas del mismo nivel en el mismo espacio esta semana
+        const { count: semanalCount, error: semanalError } = await supabase
+          .from('reservas')
+          .select('id', { count: 'exact', head: true })
+          .eq('espacio_id', espacio_id)
+          .eq('status', 'active')
+          .gte('fecha', inicioSemana)
+          .lte('fecha', finSemana)
+          .in('usuario_id', companerosIds)
+
+        // Reservas del mismo nivel en el mismo espacio hoy
+        const { count: diarioCount, error: diarioError } = await supabase
+          .from('reservas')
+          .select('id', { count: 'exact', head: true })
+          .eq('espacio_id', espacio_id)
+          .eq('fecha', fecha)
+          .eq('status', 'active')
+          .in('usuario_id', companerosIds)
+
+        if (semanalError || diarioError) {
+          return NextResponse.json({ error: 'Error al verificar cupos del nivel' }, { status: 500 })
+        }
+
+        if ((semanalCount ?? 0) >= CUPO_SEMANAL) {
+          return NextResponse.json(
+            { error: `Tu curso (${curso}) ya alcanzó el cupo semanal (${CUPO_SEMANAL}) para este espacio.` },
+            { status: 422 }
+          )
+        }
+
+        if ((diarioCount ?? 0) >= CUPO_DIARIO) {
+          return NextResponse.json(
+            { error: `Tu curso (${curso}) ya alcanzó el cupo diario (${CUPO_DIARIO}) para este espacio.` },
+            { status: 422 }
+          )
+        }
+      }
     }
     // ─────────────────────────────────────────────────────────────────────────
   }
