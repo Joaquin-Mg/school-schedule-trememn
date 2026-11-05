@@ -3,11 +3,22 @@
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
-import { Upload, Loader2, CheckCircle, AlertTriangle, LogOut, Users, ArrowLeft } from 'lucide-react'
+import { Upload, Loader2, CheckCircle, AlertTriangle, LogOut, Users, ArrowLeft, AlertOctagon } from 'lucide-react'
 
 interface ResultadoCarga {
   actualizados: number
   errores: string[]
+}
+
+interface AfectadoNoShow {
+  usuario_email: string
+  reserva_id: string
+  suspendido_hasta: string
+}
+
+interface ResultadoNoShows {
+  procesados: number
+  afectados: AfectadoNoShow[]
 }
 
 export default function AdminPage() {
@@ -21,6 +32,10 @@ export default function AdminPage() {
   const [resultado, setResultado] = useState<ResultadoCarga | null>(null)
   const [errorGlobal, setErrorGlobal] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const [registrandoNoShows, setRegistrandoNoShows] = useState(false)
+  const [resultadoNoShows, setResultadoNoShows] = useState<ResultadoNoShows | null>(null)
+  const [errorNoShows, setErrorNoShows] = useState<string | null>(null)
 
   useEffect(() => {
     const init = async () => {
@@ -75,6 +90,31 @@ export default function AdminPage() {
       setErrorGlobal('Error de red. Intenta nuevamente.')
     } finally {
       setSubiendo(false)
+    }
+  }
+
+  const handleRegistrarNoShows = async () => {
+    const confirmado = window.confirm(
+      '¿Registrar no-shows de ayer?\n\nEsto marcará como suspendidos (7 días) a todos los alumnos que tenían reserva activa ayer y no validaron el QR.\n\nEsta acción no se puede deshacer.'
+    )
+    if (!confirmado) return
+
+    setRegistrandoNoShows(true)
+    setResultadoNoShows(null)
+    setErrorNoShows(null)
+
+    try {
+      const res = await fetch('/api/admin/registrar-no-shows', { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok) {
+        setErrorNoShows(json.error ?? 'Error al registrar no-shows')
+      } else {
+        setResultadoNoShows(json)
+      }
+    } catch {
+      setErrorNoShows('Error de red. Intenta nuevamente.')
+    } finally {
+      setRegistrandoNoShows(false)
     }
   }
 
@@ -211,6 +251,76 @@ pedro.mena@trememn.cl,I°M`}
               <>
                 <Upload className="h-4 w-4" />
                 <span>Cargar CSV</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* SECCIÓN: REGISTRAR NO-SHOWS */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-5">
+          <div className="flex items-center space-x-3">
+            <div className="p-2.5 bg-red-50 text-red-600 rounded-xl">
+              <AlertOctagon className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Registrar No-Shows</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Aplica suspensión de 7 días a alumnos que tuvieron reserva ayer y no validaron el QR.
+              </p>
+            </div>
+          </div>
+
+          {errorNoShows && (
+            <div className="p-4 bg-red-50 border border-red-100 text-red-800 text-sm rounded-xl flex items-start space-x-2.5">
+              <AlertTriangle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+              <span>{errorNoShows}</span>
+            </div>
+          )}
+
+          {resultadoNoShows && (
+            <div className="space-y-3">
+              <div className="p-4 bg-emerald-50 border border-emerald-100 text-emerald-800 text-sm rounded-xl flex items-start space-x-2.5">
+                <CheckCircle className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                <span>
+                  {resultadoNoShows.procesados === 0
+                    ? 'Sin no-shows ayer. Ningún alumno fue suspendido.'
+                    : (
+                      <>
+                        <span className="font-bold">{resultadoNoShows.procesados} alumno{resultadoNoShows.procesados !== 1 ? 's' : ''}</span> suspendido{resultadoNoShows.procesados !== 1 ? 's' : ''} por 7 días.
+                      </>
+                    )
+                  }
+                </span>
+              </div>
+              {resultadoNoShows.afectados.length > 0 && (
+                <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
+                  <p className="text-xs font-bold text-amber-700 uppercase tracking-wider mb-2">Alumnos suspendidos</p>
+                  <ul className="space-y-1">
+                    {resultadoNoShows.afectados.map((a, i) => (
+                      <li key={i} className="text-xs text-amber-800 font-mono">
+                        • {a.usuario_email} — hasta {a.suspendido_hasta}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          <button
+            onClick={handleRegistrarNoShows}
+            disabled={registrandoNoShows}
+            className="inline-flex items-center space-x-2 bg-red-600 text-white font-bold text-sm px-6 py-3 rounded-xl hover:bg-red-700 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 shadow-sm"
+          >
+            {registrandoNoShows ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Procesando...</span>
+              </>
+            ) : (
+              <>
+                <AlertOctagon className="h-4 w-4" />
+                <span>Registrar No-Shows de Ayer</span>
               </>
             )}
           </button>

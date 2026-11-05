@@ -44,6 +44,15 @@ export default function Validar({ params }: PageProps) {
       } else {
         setReserva(fila as ReservaDetalle)
         setScanTime(new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
+
+        // F-5: marcar la reserva como validada si el estado es válido
+        if (fila.estado === 'valida') {
+          try {
+            await fetch(`/api/reservations/${encodeURIComponent(id)}/validar`, { method: 'PATCH' })
+          } catch {
+            // Error silencioso — no impide mostrar el resultado al inspector
+          }
+        }
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Error al conectar con el servidor.')
