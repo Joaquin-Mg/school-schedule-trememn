@@ -42,6 +42,41 @@ export async function POST(request: Request) {
 
   const esProfesor = isTeacher(user.email)
 
+  // ── F-6: Bloqueo por suspensión ───────────────────────────────────────────
+  if (!esProfesor) {
+    const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' })
+
+    const { count: suspCount, error: suspError } = await supabase
+      .from('penalizaciones')
+      .select('id', { count: 'exact', head: true })
+      .eq('usuario_id', user.id)
+      .eq('activa', true)
+      .gte('suspendido_hasta', hoy)
+
+    if (suspError) {
+      return NextResponse.json({ error: 'Error al verificar estado de suspensión' }, { status: 500 })
+    }
+
+    if ((suspCount ?? 0) > 0) {
+      // Leer la fecha exacta para el mensaje de error
+      const { data: pen } = await supabase
+        .from('penalizaciones')
+        .select('suspendido_hasta')
+        .eq('usuario_id', user.id)
+        .eq('activa', true)
+        .gte('suspendido_hasta', hoy)
+        .order('suspendido_hasta', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      return NextResponse.json(
+        { error: `Tu cuenta está suspendida hasta el ${pen?.suspendido_hasta}. No puedes realizar reservas.` },
+        { status: 403 }
+      )
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   if (!esProfesor) {
     // ── C-2: Límite de reservas activas por alumno ────────────────────────────
     const MAX = parseInt(process.env.MAX_ACTIVE_RESERVATIONS ?? '2')
